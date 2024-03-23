@@ -201,7 +201,6 @@ def get_tutorial_by_id(statement):
         result = None
         try:
             id = statement["id"]
-            address = statement["address"]
             cur.execute("SELECT * FROM tutorial WHERE id = ?", (id,))
             tutorial_rows = cur.fetchall()
             cur.execute("SELECT * FROM tutorial_step")
