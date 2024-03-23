@@ -12,6 +12,8 @@ logger = logging.getLogger(__name__)
 rollup_server = 'http://localhost:8080/host-runner'
 logger.info(f"HTTP rollup_server url is {rollup_server}")
 
+DB_CREATED = { 'created': True}
+
 con = sqlite3.connect("data.db")
 
 class tutorial:
@@ -55,7 +57,7 @@ def post(endpoint, payloadStr, logLevel):
     payload = str2hex(payloadStr)
     requests.post(f"{rollup_server}/{endpoint}", json={"payload": payload})
     
-def create_tutorial(statement):
+def create_tutorial(payload):
     status = "accept"
     try:
         try:
@@ -67,6 +69,7 @@ def create_tutorial(statement):
 
         result = None
         status = "accept"
+        statement = payload['data']
         try:
             tutorial = {
                 "title": statement["title"],
@@ -75,13 +78,13 @@ def create_tutorial(statement):
                 "address": statement["address"],
                 "likes": 0,
                 "updatedAt": None,
-                "createdAt": datetime.now()
+                "createdAt": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             }
             tutorial_steps = statement["steps"]
             tool_tags = statement["toolTags"]
 
             # Insert tutorial into the database
-            cur.execute("INSERT INTO tutorial (title, description, approximatedTime, address, likes, updatedAt, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            cur.execute("INSERT INTO tutorial (title, description, approximatedTime, address, likes, updatedAt, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?)",
                         (tutorial["title"], tutorial["description"], tutorial["approximatedTime"], tutorial["address"], tutorial["likes"], tutorial["updatedAt"], tutorial["createdAt"]))
             tutorial_id = cur.lastrowid
 
@@ -102,9 +105,9 @@ def create_tutorial(statement):
             msg = f"Error executing statement '{statement}': {e}"
             post("report", msg, logging.ERROR)
 
-        if result:
-            payloadJson = json.dumps(result)
-            post("notice", payloadJson, logging.INFO)
+    
+        payloadJson = json.dumps(result)
+        post("notice", payloadJson, logging.INFO)
 
     except Exception as e:
         status = "reject"
@@ -121,26 +124,40 @@ def get_tutorials(statement):
             msg = f"Critical error connecting to database: {e}"
             post("exception", msg, logging.ERROR)
             sys.exit(1)
-        result = None
+        result = {}
         try:
-            cur.execute("SELECT * FROM tutorial")
-            result = cur.fetchall()
+            page = statement.get("page", 1)
+            limit = statement.get("limit", 10)
+            offset = (page - 1) * limit
+
+            cur.execute("SELECT * FROM tutorial LIMIT ? OFFSET ?", (limit, offset))
+            tutorial_rows = cur.fetchall()
+            cur.execute("SELECT * FROM tutorial_step")
+            step_rows = cur.fetchall()
+            cur.execute("SELECT * FROM tool_tag")
+            tag_rows = cur.fetchall()
+            result = sanitize_tutorial({"tutorial": tutorial_rows, "tutorial_step": step_rows, "tool_tag": tag_rows})
+            total = cur.execute("SELECT COUNT(*) FROM tutorial").fetchone()[0]
+            total_pages = total // limit + 1
+            data = {
+                "data": result,
+                "page": page,
+                "limit": limit,
+                "totalQuantity": total,
+                "totalPages": total_pages
+            }
 
         except Exception as e:
             msg = f"Error executing statement '{statement}': {e}"
             post("report", msg, logging.ERROR)
             return None
 
-        if result:
-            payloadJson = json.dumps(result)
-            post("notice", payloadJson, logging.INFO)
-
     except Exception as e:
         msg = f"Error processing data {statement})"
         post("report", msg, logging.ERROR)
         return None
 
-    return result
+    return data
 
 def get_tutorial_by_address(statement):
     try:
@@ -154,16 +171,17 @@ def get_tutorial_by_address(statement):
         try:
             address = statement["address"]
             cur.execute("SELECT * FROM tutorial WHERE address = ?", (address,))
-            result = cur.fetchall()
+            tutorial_rows = cur.fetchall()
+            cur.execute("SELECT * FROM tutorial_step")
+            step_rows = cur.fetchall()
+            cur.execute("SELECT * FROM tool_tag")
+            tag_rows = cur.fetchall()
+            result = sanitize_tutorial({"tutorial": tutorial_rows, "tutorial_step": step_rows, "tool_tag": tag_rows})
 
         except Exception as e:
             msg = f"Error executing statement '{statement}': {e}"
             post("report", msg, logging.ERROR)
             return None
-
-        if result:
-            payloadJson = json.dumps(result)
-            post("notice", payloadJson, logging.INFO)
 
     except Exception as e:
         msg = f"Error processing data {statement})"
@@ -172,7 +190,7 @@ def get_tutorial_by_address(statement):
 
     return result
 
-def get_tutorial_liked_by_address(statement):
+def get_tutorial_by_id(statement):
     try:
         try:
             cur = con.cursor()
@@ -182,18 +200,20 @@ def get_tutorial_liked_by_address(statement):
             sys.exit(1)
         result = None
         try:
+            id = statement["id"]
             address = statement["address"]
-            cur.execute("SELECT * FROM tutorial_liked WHERE address = ?", (address,))
-            result = cur.fetchall()
+            cur.execute("SELECT * FROM tutorial WHERE id = ?", (id,))
+            tutorial_rows = cur.fetchall()
+            cur.execute("SELECT * FROM tutorial_step")
+            step_rows = cur.fetchall()
+            cur.execute("SELECT * FROM tool_tag")
+            tag_rows = cur.fetchall()
+            result = sanitize_tutorial({"tutorial": tutorial_rows, "tutorial_step": step_rows, "tool_tag": tag_rows})
 
         except Exception as e:
             msg = f"Error executing statement '{statement}': {e}"
             post("report", msg, logging.ERROR)
             return None
-
-        if result:
-            payloadJson = json.dumps(result)
-            post("notice", payloadJson, logging.INFO)
 
     except Exception as e:
         msg = f"Error processing data {statement})"
@@ -201,6 +221,38 @@ def get_tutorial_liked_by_address(statement):
         return None
 
     return result
+
+def sanitize_tutorial(data):
+    tutorial_rows = data['tutorial']
+    step_rows = data['tutorial_step']
+    tag_rows = data['tool_tag']
+    result = {}    
+    for tutorial_row in tutorial_rows:
+                tutorial_id = tutorial_row[0]
+                result[tutorial_id] = {
+                    "id": tutorial_row[0],
+                    "title": tutorial_row[1],
+                    "description": tutorial_row[2],
+                    "approximatedTime": tutorial_row[3],
+                    "address": tutorial_row[4],
+                    "likes": tutorial_row[5],
+                    "updatedAt": tutorial_row[6],
+                    "createdAt": tutorial_row[7],
+                    "steps": [],
+                    "tags": []
+                }       
+    for step_row in step_rows:
+        tutorial_id = step_row[3]
+        step = {"id": step_row[0], "title": step_row[1], "content": step_row[2], "tutorial_id": step_row[3]}
+        result[tutorial_id]["steps"].append(step)
+
+    for tag_row in tag_rows:
+        tutorial_id = tag_row[2]
+        tag = {"name": tag_row[1], "tutorial_id": tag_row[2], "icon": tag_row[3]}
+        result[tutorial_id]["tags"].append(tag)
+                
+    return result
+
 
 def create_like_Tutorial(statement):
     try:
@@ -231,6 +283,14 @@ def create_like_Tutorial(statement):
 
     return result
 
+def create_tables():
+    cur = con.cursor()
+    cur.execute("CREATE TABLE IF NOT EXISTS tutorial (id INTEGER PRIMARY KEY, title TEXT, description TEXT, approximatedTime TEXT, address TEXT, likes INTEGER, updatedAt TEXT, createdAt TEXT)")
+    cur.execute("CREATE TABLE IF NOT EXISTS tutorial_step (id INTEGER PRIMARY KEY, title TEXT, content TEXT, tutorial_id INTEGER)")
+    cur.execute("CREATE TABLE IF NOT EXISTS tool_tag (id INTEGER PRIMARY KEY, name TEXT, tutorial_id INTEGER, icon TEXT)")
+
+    con.commit()
+
 def handle_functions_advance(payload):
     function_id = int(payload["function_id"])
     function_map = {
@@ -250,7 +310,7 @@ def handle_functions_inspect(payload):
     function_map = {
         1 : lambda: get_tutorials(payload),
         2 : lambda: get_tutorial_by_address(payload),
-        3 : lambda: get_tutorial_liked_by_address(payload)
+        3 : lambda: get_tutorial_by_id(payload)
     }
     function = function_map.get(function_id)
     if function:
@@ -262,6 +322,9 @@ def handle_functions_inspect(payload):
 
 
 def handle_advance(data):
+    if DB_CREATED.get('created') == True:
+        create_tables()
+        DB_CREATED['created'] = False
     statement = hex2str(data["payload"])
     payload = json.loads(statement) 
     response = handle_functions_advance(payload)
@@ -273,6 +336,13 @@ def handle_inspect(data):
     statement = hex2str(data["payload"])
     payload = json.loads(statement)
     response = handle_functions_inspect(payload)
+    if response is None or len(response) == 0:
+        return "reject"
+    response = json.dumps(response)
+    enconde = str2hex(response)
+    report = {"payload": enconde}
+    requests.post(rollup_server + "/report", json=report)
+
     return "accept"
 
 
