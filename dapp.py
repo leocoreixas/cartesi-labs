@@ -8,11 +8,34 @@ import sys
 logging.basicConfig(level="INFO")
 logger = logging.getLogger(__name__)
 
-rollup_server = environ["ROLLUP_HTTP_SERVER_URL"]
+rollup_server = 'http://localhost:8080/host-runner'
 logger.info(f"HTTP rollup_server url is {rollup_server}")
 
 con = sqlite3.connect("data.db")
 
+class tutorial:
+    def __init__(self, title, description, approximatedTime, steps, address, likes, toolTags, updatedAt, createdAt):
+        self.title = title
+        self.description = description
+        self.approximatedTime = approximatedTime
+        self.steps = steps
+        self.address = address
+        self.likes = likes
+        self.toolTags = toolTags
+        self.updatedAt = updatedAt
+        self.createdAt = createdAt
+        
+class tutorial_step:
+    def __init__(self, title, content, tutorial_id):
+        self.title = title
+        self.content = content
+        self.tutorial_id = tutorial_id
+        
+class tool_tag:
+    def __init__(self, name, tutorial_id, icon):
+        self.name = name
+        self.tutorial_id = tutorial_id
+        self.icon = icon
 
 def hex2str(hex):
     """
@@ -44,8 +67,27 @@ def create_tutorial(statement):
         result = None
         status = "accept"
         try:
-            tutorial = statement["tutorial"]
-            cur.execute("INSERT INTO tutorial (title, description, author, url, address) VALUES (?, ?, ?, ?, ?)", (tutorial["title"], tutorial["description"], tutorial["author"], tutorial["url"], tutorial["address"]))
+            tutorial ={
+                
+            }
+            tutorial_steps = statement["tutorial_steps"]
+            tool_tags = statement["tool_tags"]
+
+            # Insert tutorial into the database
+            cur.execute("INSERT INTO tutorial (title, description, approximatedTime, address, likes, createdBy, updatedAt, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                        (tutorial["title"], tutorial["description"], tutorial["approximatedTime"], tutorial["address"], tutorial["likes"], tutorial["createdBy"], tutorial["updatedAt"], tutorial["createdAt"]))
+            tutorial_id = cur.lastrowid
+
+            # Insert tutorial steps into the database
+            for step in tutorial_steps:
+                cur.execute("INSERT INTO tutorial_step (title, content, tutorial_id) VALUES (?, ?, ?)",
+                            (step["title"], step["content"], tutorial_id))
+
+            # Insert tool tags into the database
+            for tag in tool_tags:
+                cur.execute("INSERT INTO tool_tag (name, tutorial_id, icon) VALUES (?, ?, ?)",
+                            (tag["name"], tutorial_id, tag["icon"]))
+                
             result = cur.fetchall()
 
         except Exception as e:
@@ -163,23 +205,9 @@ def create_like_Tutorial(statement):
             sys.exit(1)
         result = None
         try:
-            address = statement["address"]
-            tutorial_id = statement["tutorial_id"]
-            cur.execute("INSERT INTO tutorial_liked (address, likes, tutorial_id) VALUES (?, 1, ?) ON CONFLICT(address) DO UPDATE SET likes = tutorial_liked.likes + 1", (address, tutorial_id))
-            result = cur.fetchall()
-            
-            cur.execute("SELECT * FROM tutorial_liked WHERE address = ?", (address,))
-            tutorial_liked = cur.fetchall()
-            
-            prizeExists = cur.execute("SELECT * FROM prize WHERE tutorial_id = ?", (tutorial_id,)).fetchall()
-            if tutorial_liked[0][1] % 10 == 0:
-                if prizeExists:
-                    cur.execute("UPDATE prize SET prize = prize + 1 WHERE tutorial_id = ?", (tutorial_id,))
-                else:
-                    cur.execute("INSERT INTO prize (tutorial_id, prize) VALUES (?, 1)", (tutorial_id,))
-            
-            
-
+            cur.execute("UPDATE tutorial SET likes = likes + 1 WHERE address = ?", (statement["address"],))
+            result = cur.fetchall()          
+        
         except Exception as e:
             msg = f"Error executing statement '{statement}': {e}"
             post("report", msg, logging.ERROR)
