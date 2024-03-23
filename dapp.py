@@ -1,3 +1,4 @@
+import datetime
 from os import environ
 import logging
 import requests
@@ -67,15 +68,21 @@ def create_tutorial(statement):
         result = None
         status = "accept"
         try:
-            tutorial ={
-                
+            tutorial = {
+                "title": statement["title"],
+                "description": statement["description"],
+                "approximatedTime": statement["approximatedTime"],
+                "address": statement["address"],
+                "likes": 0,
+                "updatedAt": None,
+                "createdAt": datetime.now()
             }
-            tutorial_steps = statement["tutorial_steps"]
-            tool_tags = statement["tool_tags"]
+            tutorial_steps = statement["steps"]
+            tool_tags = statement["toolTags"]
 
             # Insert tutorial into the database
-            cur.execute("INSERT INTO tutorial (title, description, approximatedTime, address, likes, createdBy, updatedAt, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-                        (tutorial["title"], tutorial["description"], tutorial["approximatedTime"], tutorial["address"], tutorial["likes"], tutorial["createdBy"], tutorial["updatedAt"], tutorial["createdAt"]))
+            cur.execute("INSERT INTO tutorial (title, description, approximatedTime, address, likes, updatedAt, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                        (tutorial["title"], tutorial["description"], tutorial["approximatedTime"], tutorial["address"], tutorial["likes"], tutorial["updatedAt"], tutorial["createdAt"]))
             tutorial_id = cur.lastrowid
 
             # Insert tutorial steps into the database
