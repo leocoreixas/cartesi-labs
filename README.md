@@ -14,21 +14,21 @@ This tutorial aims to demonstrate the methodology for documenting Cartesi projec
 
 Initially, you'll encounter the Home screen, offering options to filter tutorials either by created tags or through a search function.
 <br><br>
-<img src="src/assets/images/Home.png" alt="drawing" width="800" heigth="800"/>
+<img src="assets/Home.png" alt="drawing" width="800" heigth="800"/>
 <br><br>
 Subsequently, you can navigate into tutorials by clicking on the cards with the 'start' button.
 <br><br>
-<img src="src/assets/images/See_Tutorial.png" alt="drawing" width="800" heigth="800"/>
+<img src="assets/See_Tutorial.png" alt="drawing" width="800" heigth="800"/>
 <br><br>
 Additionally, you have the option to contribute your own tutorial by accessing the "Add tutorial" button in the navigation bar. So, you will be redirected to the tutorial creation page, which is divided into two parts, as shown in the images below.
 <br><br>
 Step 1:
 <br><br>
-<img src="src/assets/images/Add_tutorial_1.png" alt="drawing" width="800" heigth="800"/>
+<img src="assets/Add_tutorial_1.png" alt="drawing" width="800" heigth="800"/>
 <br><br>
 Step 2:
 <br><br>
-<img src="src/assets/images/Add_tutorial_2.png" alt="drawing" width="800"/>
+<img src="assets/Add_tutorial_2.png" alt="drawing" width="800"/>
 
 ---
 
