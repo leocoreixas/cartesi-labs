@@ -26,6 +26,7 @@ RUN set -e && \
     find /usr/local/lib -type d -name __pycache__ -exec rm -r {} +
 
 COPY ./dapp.py .
+COPY ./seeds.py .
 
 ENV ROLLUP_HTTP_SERVER_URL="http://127.0.0.1:5004"
 

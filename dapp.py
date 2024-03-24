@@ -6,6 +6,7 @@ import sqlite3
 import json
 import sys
 import math
+from seeds import create_default_tutorial
 
 logging.basicConfig(level="INFO")
 logger = logging.getLogger(__name__)
@@ -344,9 +345,6 @@ def handle_functions_inspect(payload):
 
 
 def handle_advance(data):
-    if DB_CREATED.get('created') == True:
-        create_tables()
-        DB_CREATED['created'] = False
     statement = hex2str(data["payload"])
     payload = json.loads(statement) 
     response = handle_functions_advance(payload)
@@ -354,7 +352,7 @@ def handle_advance(data):
     return response
 
 
-def handle_inspect(data):
+def handle_inspect(data):    
     statement = hex2str(data["payload"])
     payload = json.loads(statement)
     response = handle_functions_inspect(payload)
@@ -374,6 +372,11 @@ handlers = {
 }
 
 finish = {"status": "accept"}
+
+if DB_CREATED.get('created') == True:
+    create_tables()
+    create_default_tutorial(con)
+    DB_CREATED['created'] = False
 
 while True:
     logger.info("Sending finish")
