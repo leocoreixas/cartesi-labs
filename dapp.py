@@ -5,6 +5,7 @@ import requests
 import sqlite3
 import json
 import sys
+import math
 
 logging.basicConfig(level="INFO")
 logger = logging.getLogger(__name__)
@@ -96,7 +97,7 @@ def create_tutorial(payload):
             # Insert tool tags into the database
             for tag in tool_tags:
                 cur.execute("INSERT INTO tool_tag (name, tutorial_id, icon) VALUES (?, ?, ?)",
-                            (tag["name"], tutorial_id, tag["icon"]))
+                            (tag["name"], tutorial_id, ""))
                 
             result = cur.fetchall()
 
@@ -128,17 +129,38 @@ def get_tutorials(statement):
         try:
             page = statement.get("page", 1)
             limit = statement.get("limit", 10)
+            name = statement.get("name", None)
+            tags = statement.get("tags", None)
+            tutorial_ids = []
+            if tags:
+                cur.execute("SELECT tutorial_id FROM tool_tag WHERE name IN ({})".format(','.join('?' * len(tags))), tags)
+                tutorial_ids = [row[0] for row in cur.fetchall()]
             offset = (page - 1) * limit
+            tutorial_rows = []
+            
+            if name and len(tutorial_ids) > 0:
+                cur.execute("SELECT * FROM tutorial WHERE title LIKE ? AND id IN ({}) LIMIT ? OFFSET ?", ('%' + name + '%', tutorial_ids, limit, offset))
+                tutorial_rows = cur.fetchall()
+            elif name:
+                cur.execute("SELECT * FROM tutorial WHERE title LIKE ? LIMIT ? OFFSET ?", ('%' + name + '%', limit, offset))
+                tutorial_rows = cur.fetchall()
+            elif len(tutorial_ids) > 0:
+                cur.execute("SELECT * FROM tutorial WHERE id IN ({}) LIMIT ? OFFSET ?".format(','.join('?' * len(tutorial_ids))), (*tutorial_ids, limit, offset))
+                tutorial_rows = cur.fetchall()
+            elif not name and not tags:
+                cur.execute("SELECT * FROM tutorial LIMIT ? OFFSET ?", (limit, offset))
+                tutorial_rows = cur.fetchall()
 
-            cur.execute("SELECT * FROM tutorial LIMIT ? OFFSET ?", (limit, offset))
-            tutorial_rows = cur.fetchall()
-            cur.execute("SELECT * FROM tutorial_step")
-            step_rows = cur.fetchall()
-            cur.execute("SELECT * FROM tool_tag")
-            tag_rows = cur.fetchall()
-            result = sanitize_tutorial({"tutorial": tutorial_rows, "tutorial_step": step_rows, "tool_tag": tag_rows})
+            if len(tutorial_rows) > 0:
+                query_ids = [row[0] for row in tutorial_rows]
+                cur.execute("SELECT * FROM tutorial_step WHERE tutorial_id IN ({})".format(','.join('?' * len(query_ids))), query_ids)
+                step_rows = cur.fetchall()
+                cur.execute("SELECT * FROM tool_tag WHERE tutorial_id IN ({})".format(','.join('?' * len(query_ids))), query_ids)
+                tag_rows = cur.fetchall()
+                result = sanitize_tutorial({"tutorial": tutorial_rows, "tutorial_step": step_rows, "tool_tag": tag_rows})
+
             total = cur.execute("SELECT COUNT(*) FROM tutorial").fetchone()[0]
-            total_pages = total // limit + 1
+            total_pages = math.ceil(total / limit)
             data = {
                 "data": result,
                 "page": page,
@@ -172,9 +194,10 @@ def get_tutorial_by_address(statement):
             address = statement["address"]
             cur.execute("SELECT * FROM tutorial WHERE address = ?", (address,))
             tutorial_rows = cur.fetchall()
-            cur.execute("SELECT * FROM tutorial_step")
+            id = tutorial_rows[0][0]
+            cur.execute("SELECT * FROM tutorial_step WHERE tutorial_id = ?", (id,))
             step_rows = cur.fetchall()
-            cur.execute("SELECT * FROM tool_tag")
+            cur.execute("SELECT * FROM tool_tag WHERE tutorial_id = ?", (id,))
             tag_rows = cur.fetchall()
             result = sanitize_tutorial({"tutorial": tutorial_rows, "tutorial_step": step_rows, "tool_tag": tag_rows})
 
@@ -203,9 +226,9 @@ def get_tutorial_by_id(statement):
             id = statement["id"]
             cur.execute("SELECT * FROM tutorial WHERE id = ?", (id,))
             tutorial_rows = cur.fetchall()
-            cur.execute("SELECT * FROM tutorial_step")
+            cur.execute("SELECT * FROM tutorial_step WHERE tutorial_id = ?", (id,))
             step_rows = cur.fetchall()
-            cur.execute("SELECT * FROM tool_tag")
+            cur.execute("SELECT * FROM tool_tag WHERE tutorial_id = ?", (id,))
             tag_rows = cur.fetchall()
             result = sanitize_tutorial({"tutorial": tutorial_rows, "tutorial_step": step_rows, "tool_tag": tag_rows})
 
